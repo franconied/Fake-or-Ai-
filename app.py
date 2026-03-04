@@ -7,10 +7,10 @@ import tempfile
 import numpy as np
 
 # --- CONFIGURACIÓN ---
-st.set_page_config(page_title="VERITAS AI Pro", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="REAL OR FAKE", page_icon="🛡️", layout="wide")
 
 # REEMPLAZA CON TU TOKEN REAL
-API_TOKEN = "TU_API_TOKEN_ACA" 
+API_TOKEN = st.secrets["HF_TOKEN"]
 headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
 # URLs de los dos "Cerebros"
@@ -33,8 +33,8 @@ def extraer_score(resultado):
     return 0
 
 # --- INTERFAZ ---
-st.title("🛡️ VERITAS AI PRO: Doble Verificación")
-st.write("Análisis cruzado de píxeles y biometría facial.")
+st.title("🛡️ REAL OR FAKE")
+st.write("Double checked info.")
 
 archivo = st.file_uploader("Subí una foto o video (2MB máx)", type=['jpg', 'jpeg', 'png', 'mp4'])
 
