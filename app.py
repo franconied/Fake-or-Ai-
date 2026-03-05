@@ -385,13 +385,23 @@ def extraer_score_hf(resultado, modelo_tipo="general"):
         return max(scores.values())
     return None
 
-def determinar_veredicto(score):
-    if score >= 0.65:
-        return "🚨 PROBABLEMENTE FALSO / IA", "fake-box", score
-    elif score >= 0.40:
-        return "⚠️ DUDOSO — PUEDE SER IA", "result-box", score
+def determinar_veredicto(score, tiene_hf=False):
+    if tiene_hf:
+        # Con HF los modelos son más precisos, umbrales normales
+        if score >= 0.60:
+            return "🚨 PROBABLEMENTE FALSO / IA", "fake-box", score
+        elif score >= 0.35:
+            return "⚠️ DUDOSO — PUEDE SER IA", "result-box", score
+        else:
+            return "✅ PROBABLEMENTE REAL", "real-box", score
     else:
-        return "✅ PROBABLEMENTE REAL", "real-box", score
+        # Sin HF, el análisis forense solo no es suficiente para ser categórico
+        if score >= 0.55:
+            return "🚨 INDICIOS DE IA / FAKE", "fake-box", score
+        elif score >= 0.30:
+            return "⚠️ INCONCLUSO — Análisis forense insuficiente", "result-box", score
+        else:
+            return "✅ SIN INDICIOS CLAROS DE IA", "real-box", score
 
 
 # --- SIDEBAR ---
@@ -525,7 +535,8 @@ if archivo:
                     score_final = score_forense * 0.4 + score_hf_gen * 0.35 + score_hf_face * 0.25
             
             # --- VEREDICTO ---
-            veredicto, box_class, _ = determinar_veredicto(score_final)
+            tiene_hf = score_hf_gen is not None or score_hf_face is not None
+            veredicto, box_class, _ = determinar_veredicto(score_final, tiene_hf)
             
             st.markdown(f"""
             <div class="{box_class}">
@@ -536,6 +547,9 @@ if archivo:
                 </p>
             </div>
             """, unsafe_allow_html=True)
+            
+            if not tiene_hf:
+                st.warning("⚠️ **Precisión limitada**: Sin token de Hugging Face, el análisis es solo forense local (~60-70% de precisión). Configurá `HF_TOKEN` para resultados más confiables.")
             
             st.divider()
             
