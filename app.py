@@ -102,11 +102,12 @@ API_TOKEN = st.secrets.get("HF_TOKEN", "")
 HF_HEADERS = {"Authorization": f"Bearer {API_TOKEN}"}
 
 MODELOS_HF_GENERAL = [
-    "https://api-inference.huggingface.co/models/umm-maybe/AI-image-detector",
-    "https://api-inference.huggingface.co/models/Organismo/DetectAI",
+    "https://api-inference.huggingface.co/models/dima806/deepfake_vs_real_image_detection",
+    "https://api-inference.huggingface.co/models/Wvolf/ViT_Deepfake_Detection",
 ]
 MODELOS_HF_ROSTROS = [
-    "https://api-inference.huggingface.co/models/prithivMLmods/Deep-Fake-Detector-Model",
+    "https://api-inference.huggingface.co/models/prithivMLmods/Deep-Fake-Detector-v2-Model",
+    "https://api-inference.huggingface.co/models/prithivMLmods/deepfake-detector-model-v1",
 ]
 
 # ============================================================
@@ -377,12 +378,16 @@ def extraer_score_hf(resultado, modelo_tipo="general"):
     for item in resultado:
         if isinstance(item, dict) and "label" in item:
             scores[item['label'].lower()] = item.get('score', 0)
-    fake_keys = ['artificial','fake','label_1','ai','ai-generated','deepfake','manipulated','fake_face']
+    # dima806: Fake/Real | Wvolf: Deepfake/Real | prithiv v2: Deepfake/Realism | prithiv v1: fake/real
+    fake_keys = ['fake', 'deepfake', 'artificial', 'ai', 'ai-generated', 'manipulated', 'fake_face', 'label_1']
     for k in fake_keys:
         if k in scores:
             return scores[k]
-    if scores:
-        return max(scores.values())
+    # Si solo encontramos real/realism, invertir el score
+    real_keys = ['real', 'realism']
+    for k in real_keys:
+        if k in scores:
+            return 1.0 - scores[k]
     return None
 
 def determinar_veredicto(score, tiene_hf=False):
