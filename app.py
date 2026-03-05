@@ -7,7 +7,6 @@ import tempfile
 import numpy as np
 import json
 from datetime import datetime
-import base64
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(
@@ -17,98 +16,83 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilos personalizados
 st.markdown("""
     <style>
-    .main {
-        padding: 20px;
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Syne', sans-serif;
     }
+    .main { padding: 20px; background: #0a0a0a; }
+    h1, h2, h3 { font-family: 'Syne', sans-serif; }
+
     .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        font-weight: bold;
-        border-radius: 10px;
-        padding: 12px 30px;
+        background: linear-gradient(135deg, #00ff88 0%, #00ccff 100%);
+        color: #000;
+        font-weight: 800;
+        font-family: 'Space Mono', monospace;
+        border-radius: 4px;
+        padding: 14px 30px;
         border: none;
-        transition: transform 0.2s;
+        letter-spacing: 1px;
+        transition: all 0.2s;
+        text-transform: uppercase;
     }
-    .stButton > button:hover {
-        transform: scale(1.05);
-    }
+    .stButton > button:hover { transform: scale(1.03); opacity: 0.9; }
+
     .result-box {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        padding: 20px;
-        border-radius: 10px;
-        border-left: 5px solid #667eea;
+        background: #1a1a2e;
+        padding: 24px;
+        border-radius: 8px;
+        border-left: 5px solid #f39c12;
+        color: #fff;
     }
     .real-box {
-        background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
-        padding: 20px;
-        border-radius: 10px;
-        border-left: 5px solid #2ecc71;
-        color: #000;
-    }
-    .real-box h1, .real-box h2 {
-        color: #000;
+        background: #0d1f0d;
+        padding: 24px;
+        border-radius: 8px;
+        border-left: 5px solid #00ff88;
+        color: #fff;
     }
     .fake-box {
-        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-        padding: 20px;
-        border-radius: 10px;
-        border-left: 5px solid #e74c3c;
-        color: #000;
-    }
-    .fake-box h1, .fake-box h2 {
-        color: #000;
+        background: #1f0d0d;
+        padding: 24px;
+        border-radius: 8px;
+        border-left: 5px solid #ff4444;
+        color: #fff;
     }
     .metric-card {
-        background: white;
-        padding: 15px;
-        border-radius: 8px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        background: #111;
+        padding: 16px;
+        border-radius: 6px;
+        border: 1px solid #222;
         margin: 10px 0;
+        color: #eee;
+        font-family: 'Space Mono', monospace;
+        font-size: 13px;
     }
+    .forensic-card {
+        background: #111;
+        border: 1px solid #333;
+        padding: 16px;
+        border-radius: 6px;
+        margin: 8px 0;
+        font-family: 'Space Mono', monospace;
+        font-size: 12px;
+        color: #ccc;
+    }
+    .forensic-card .label { color: #00ccff; font-weight: bold; }
+    .forensic-card .value { color: #00ff88; }
+    .forensic-card .suspicious { color: #ff4444; }
     .warning-box {
         background: #1a1a1a;
-        border: 3px solid #e74c3c;
-        padding: 25px;
-        border-radius: 10px;
+        border: 2px solid #ff4444;
+        padding: 20px;
+        border-radius: 8px;
         margin: 15px 0;
-        color: #ffffff;
-    }
-    .warning-box h4 {
-        color: #ff6b6b;
-        margin-top: 0;
-        font-size: 18px;
-    }
-    .warning-box p {
-        color: #ffffff;
-        font-size: 14px;
-        margin: 8px 0;
-    }
-    .warning-box ul {
-        color: #ffffff;
-        margin: 10px 0;
-    }
-    .warning-box li {
-        color: #ffffff;
-        margin: 6px 0;
-        list-style-position: inside;
-    }
-    .warning-box a {
-        color: #3498db;
-        text-decoration: underline;
-        font-weight: bold;
-    }
-    .technical-box {
-        background: #2c3e50;
-        border-left: 4px solid #3498db;
-        padding: 15px;
-        border-radius: 5px;
-        margin: 10px 0;
-        color: #ecf0f1;
-        font-family: monospace;
-        font-size: 12px;
+        color: #fff;
+        font-family: 'Space Mono', monospace;
+        font-size: 13px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -117,446 +101,518 @@ st.markdown("""
 API_TOKEN = st.secrets.get("HF_TOKEN", "")
 HF_HEADERS = {"Authorization": f"Bearer {API_TOKEN}"}
 
-# ============================================
-# OPCIÓN 1: Hugging Face (con backup)
-# ============================================
 MODELOS_HF_GENERAL = [
     "https://api-inference.huggingface.co/models/umm-maybe/AI-image-detector",
     "https://api-inference.huggingface.co/models/Organismo/DetectAI",
 ]
-
 MODELOS_HF_ROSTROS = [
     "https://api-inference.huggingface.co/models/prithivMLmods/Deep-Fake-Detector-Model",
 ]
 
-# ============================================
-# OPCIÓN 2: API Local/Simulada (sin internet)
-# ============================================
-def analizar_con_modelo_local(imagen_bytes):
-    """
-    Simula un análisis con características de la imagen.
-    En producción, aquí irían modelos locales reales.
-    """
-    try:
-        # Convertir bytes a imagen
-        img = Image.open(io.BytesIO(imagen_bytes))
-        img_array = np.array(img)
-        
-        # Análisis básico de características
-        # (En producción usarías modelos reales como PyTorch/TensorFlow)
-        
-        # Simulación: buscar artefactos típicos de IA
-        # - Colores anómalos
-        # - Texturas irregulares
-        # - Patrones repetitivos
-        
-        # Para demo, retornamos un resultado aleatorio controlado
-        # En producción sería un modelo entrenado real
-        
-        return {
-            "general": [{
-                "label": "real",
-                "score": 0.55
-            }, {
-                "label": "ai-generated",
-                "score": 0.45
-            }],
-            "rostro": [{
-                "label": "real",
-                "score": 0.72
-            }, {
-                "label": "deepfake",
-                "score": 0.28
-            }]
-        }
-    except Exception as e:
-        return None
+# ============================================================
+# ANÁLISIS FORENSE REAL (sin dependencias externas)
+# ============================================================
 
-def consultar_modelo_hf(urls, datos_binarios, nombre_modelo="modelo"):
+def analizar_frecuencias(img_array):
+    """Análisis de frecuencias con FFT — las imágenes IA tienen patrones espectrales anómalos."""
+    gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY).astype(np.float32)
+    f = np.fft.fft2(gray)
+    fshift = np.fft.fftshift(f)
+    magnitude = np.log(np.abs(fshift) + 1)
+    
+    h, w = magnitude.shape
+    cx, cy = h // 2, w // 2
+    radio = min(h, w) // 8
+    
+    centro = magnitude[cx-radio:cx+radio, cy-radio:cy+radio].mean()
+    bordes = magnitude.mean()
+    ratio_frecuencias = centro / (bordes + 1e-8)
+    
+    # Imágenes IA tienden a tener ratio más alto (artefactos en frecuencias altas)
+    sospechoso = ratio_frecuencias > 2.5
+    return ratio_frecuencias, sospechoso
+
+def analizar_ruido(img_array):
+    """Analiza el patrón de ruido — imágenes IA tienen ruido más uniforme/sintético."""
+    gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY).astype(np.float32)
+    
+    # Filtro laplaciano para extraer ruido
+    laplacian = cv2.Laplacian(gray, cv2.CV_64F)
+    
+    std_ruido = laplacian.std()
+    mean_ruido = abs(laplacian.mean())
+    
+    # Dividir en bloques y analizar varianza
+    h, w = gray.shape
+    block_size = 32
+    varianzas = []
+    for i in range(0, h - block_size, block_size):
+        for j in range(0, w - block_size, block_size):
+            bloque = laplacian[i:i+block_size, j:j+block_size]
+            varianzas.append(bloque.var())
+    
+    # Imágenes reales tienen varianza de ruido más heterogénea
+    cv_ruido = np.std(varianzas) / (np.mean(varianzas) + 1e-8)
+    
+    # Bajo coeficiente de variación = ruido muy uniforme = sospechoso
+    sospechoso = cv_ruido < 0.8
+    return cv_ruido, std_ruido, sospechoso
+
+def analizar_compresion_ela(img_array):
     """
-    Consulta modelos en Hugging Face con reintentos automáticos.
+    Error Level Analysis (ELA) — detecta inconsistencias de compresión JPEG.
+    Imágenes manipuladas o generadas por IA tienen patrones ELA anómalos.
     """
+    img_pil = Image.fromarray(img_array)
+    
+    buf1 = io.BytesIO()
+    img_pil.save(buf1, format="JPEG", quality=90)
+    buf1.seek(0)
+    img_90 = np.array(Image.open(buf1).convert("RGB")).astype(np.float32)
+    
+    buf2 = io.BytesIO()
+    img_pil.save(buf2, format="JPEG", quality=75)
+    buf2.seek(0)
+    img_75 = np.array(Image.open(buf2).convert("RGB")).astype(np.float32)
+    
+    original = img_array.astype(np.float32)
+    
+    ela_diff = np.abs(original - img_90)
+    ela_diff2 = np.abs(img_90 - img_75)
+    
+    ela_mean = ela_diff.mean()
+    ela_std = ela_diff.std()
+    ela_ratio = ela_mean / (ela_std + 1e-8)
+    
+    # ELA muy uniforme (bajo std relativo) = posible generación IA
+    sospechoso = ela_std < 8.0 or ela_ratio > 3.0
+    return ela_mean, ela_std, sospechoso
+
+def analizar_consistencia_color(img_array):
+    """
+    Analiza distribución de color en el espacio HSV.
+    Imágenes IA tienden a tener saturación anormalmente uniforme o extrema.
+    """
+    hsv = cv2.cvtColor(img_array, cv2.COLOR_RGB2HSV).astype(np.float32)
+    
+    h_channel = hsv[:,:,0]
+    s_channel = hsv[:,:,1]
+    v_channel = hsv[:,:,2]
+    
+    sat_mean = s_channel.mean()
+    sat_std = s_channel.std()
+    val_std = v_channel.std()
+    
+    # Calcular entropía del canal de matiz
+    hist_h = np.histogram(h_channel, bins=36, range=(0, 180))[0]
+    hist_h = hist_h / (hist_h.sum() + 1e-8)
+    entropia_h = -np.sum(hist_h * np.log(hist_h + 1e-8))
+    
+    # Saturación muy alta y uniforme = sospechoso
+    sospechoso = (sat_mean > 140 and sat_std < 40) or (sat_std < 20)
+    return sat_mean, sat_std, entropia_h, sospechoso
+
+def analizar_bordes_texturas(img_array):
+    """
+    Analiza la naturalidad de bordes y texturas.
+    Imágenes IA tienen bordes más suaves y texturas repetitivas.
+    """
+    gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    
+    # Detectar bordes con Canny
+    edges = cv2.Canny(gray, 50, 150)
+    edge_density = edges.mean()
+    
+    # Analizar textura con LBP simplificado
+    gray_f = gray.astype(np.float32)
+    kernel = np.array([[-1,-1,-1],[-1,8,-1],[-1,-1,-1]], dtype=np.float32)
+    texture_response = cv2.filter2D(gray_f, -1, kernel)
+    texture_energy = (texture_response ** 2).mean()
+    texture_std = texture_response.std()
+    
+    # Bordes muy suaves (baja densidad) + textura baja energía = sospechoso
+    sospechoso = edge_density < 5.0 or texture_energy < 100
+    return edge_density, texture_energy, texture_std, sospechoso
+
+def analizar_simetria_facial(img_array):
+    """
+    Detecta simetría facial anormal — deepfakes suelen tener simetría perfecta.
+    """
+    gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    h, w = gray.shape
+    
+    mitad_izq = gray[:, :w//2].astype(np.float32)
+    mitad_der = np.fliplr(gray[:, w//2:]).astype(np.float32)
+    
+    min_w = min(mitad_izq.shape[1], mitad_der.shape[1])
+    diff = np.abs(mitad_izq[:, :min_w] - mitad_der[:, :min_w])
+    
+    asimetria = diff.mean()
+    
+    # Muy baja asimetría = demasiado simétrico = sospechoso (deepfake)
+    sospechoso = asimetria < 8.0
+    return asimetria, sospechoso
+
+def calcular_score_forensico(img_array):
+    """
+    Combina todos los análisis forenses y devuelve un score de 0 a 1
+    donde 1 = muy probable IA/Fake.
+    """
+    indicadores = []
+    detalles = {}
+    
+    # 1. Análisis de frecuencias
+    try:
+        ratio_freq, sosp_freq = analizar_frecuencias(img_array)
+        indicadores.append(0.7 if sosp_freq else 0.2)
+        detalles["frecuencias"] = {
+            "ratio": round(float(ratio_freq), 3),
+            "sospechoso": sosp_freq,
+            "descripcion": "Artefactos en frecuencias altas (FFT)"
+        }
+    except:
+        pass
+    
+    # 2. Análisis de ruido
+    try:
+        cv_ruido, std_ruido, sosp_ruido = analizar_ruido(img_array)
+        indicadores.append(0.75 if sosp_ruido else 0.15)
+        detalles["ruido"] = {
+            "coef_variacion": round(float(cv_ruido), 3),
+            "std": round(float(std_ruido), 2),
+            "sospechoso": sosp_ruido,
+            "descripcion": "Uniformidad del patrón de ruido"
+        }
+    except:
+        pass
+    
+    # 3. ELA
+    try:
+        ela_mean, ela_std, sosp_ela = analizar_compresion_ela(img_array)
+        indicadores.append(0.8 if sosp_ela else 0.2)
+        detalles["ela"] = {
+            "mean": round(float(ela_mean), 2),
+            "std": round(float(ela_std), 2),
+            "sospechoso": sosp_ela,
+            "descripcion": "Error Level Analysis (consistencia JPEG)"
+        }
+    except:
+        pass
+    
+    # 4. Color
+    try:
+        sat_mean, sat_std, entropia_h, sosp_color = analizar_consistencia_color(img_array)
+        indicadores.append(0.65 if sosp_color else 0.1)
+        detalles["color"] = {
+            "saturacion_media": round(float(sat_mean), 1),
+            "saturacion_std": round(float(sat_std), 1),
+            "entropia_matiz": round(float(entropia_h), 3),
+            "sospechoso": sosp_color,
+            "descripcion": "Distribución HSV y entropía de color"
+        }
+    except:
+        pass
+    
+    # 5. Bordes y texturas
+    try:
+        edge_density, texture_energy, texture_std, sosp_bordes = analizar_bordes_texturas(img_array)
+        indicadores.append(0.7 if sosp_bordes else 0.15)
+        detalles["bordes"] = {
+            "densidad_bordes": round(float(edge_density), 2),
+            "energia_textura": round(float(texture_energy), 1),
+            "sospechoso": sosp_bordes,
+            "descripcion": "Naturalidad de bordes y texturas"
+        }
+    except:
+        pass
+    
+    # 6. Simetría
+    try:
+        asimetria, sosp_simetria = analizar_simetria_facial(img_array)
+        indicadores.append(0.6 if sosp_simetria else 0.1)
+        detalles["simetria"] = {
+            "asimetria": round(float(asimetria), 2),
+            "sospechoso": sosp_simetria,
+            "descripcion": "Simetría bilateral (deepfake suele ser perfecta)"
+        }
+    except:
+        pass
+    
+    if not indicadores:
+        return 0.5, detalles
+    
+    # Score ponderado — ELA y ruido tienen más peso
+    score = np.mean(indicadores)
+    
+    # Bonus: si 4+ indicadores son sospechosos, aumentar score
+    n_sospechosos = sum(1 for v in detalles.values() if v.get("sospechoso", False))
+    if n_sospechosos >= 4:
+        score = min(score * 1.2, 0.95)
+    elif n_sospechosos <= 1:
+        score = max(score * 0.8, 0.05)
+    
+    return float(score), detalles
+
+
+def consultar_modelo_hf(urls, datos_binarios):
     if isinstance(urls, str):
         urls = [urls]
-    
-    intentos_realizados = []
-    
+    intentos = []
     for url in urls:
         try:
-            nombre_corto = url.split("/")[-1][:30]
+            nombre = url.split("/")[-1][:30]
             resp = requests.post(url, headers=HF_HEADERS, data=datos_binarios, timeout=30)
-            
             if resp.status_code == 200:
-                return resp.json()
-            elif resp.status_code == 503:
-                intentos_realizados.append(f"⏳ {nombre_corto}: Cargando...")
-                continue
-            elif resp.status_code == 410:
-                intentos_realizados.append(f"❌ {nombre_corto}: No disponible")
-                continue
+                return resp.json(), None
             else:
-                intentos_realizados.append(f"⚠️ {nombre_corto}: Error {resp.status_code}")
-                continue
-                
-        except requests.exceptions.Timeout:
-            intentos_realizados.append(f"⏱️ {nombre_corto}: Timeout")
-            continue
+                intentos.append(f"{nombre}: Error {resp.status_code}")
         except Exception as e:
-            intentos_realizados.append(f"⚠️ {nombre_corto}: {str(e)[:25]}")
-            continue
-    
-    return {
-        "error": f"No se pudo conectar",
-        "detalles": intentos_realizados
-    }
+            intentos.append(f"{url.split('/')[-1][:20]}: {str(e)[:25]}")
+    return None, intentos
 
-def extraer_score(resultado, modelo_tipo="general"):
-    """
-    Extrae el porcentaje de IA/FAKE de la respuesta del modelo
-    Retorna (score, label, confianza)
-    """
-    if isinstance(resultado, dict) and "error" in resultado:
-        detalles = resultado.get("detalles", [])
-        error_msg = resultado.get("error", "Error desconocido")
-        return None, "Error", detalles
-    
-    if isinstance(resultado, list) and len(resultado) > 0:
-        scores = {}
-        for item in resultado:
-            if isinstance(item, dict) and "label" in item:
-                label = item['label'].lower()
-                score = item.get('score', 0)
-                scores[label] = score
-        
-        # Buscar etiquetas de AI/Fake
-        if modelo_tipo == "general":
-            fake_keywords = ['artificial', 'fake', 'label_1', 'ai', 'ai-generated']
-        else:
-            fake_keywords = ['fake', 'deepfake', 'manipulated', 'label_1', 'fake_face']
-        
-        for key in fake_keywords:
-            if key in scores:
-                return scores[key], key, f"{scores[key]*100:.1f}%"
-        
-        # Si no encontramos fake, retornar el score más alto
-        if scores:
-            max_label = max(scores, key=scores.get)
-            return scores[max_label], max_label, f"{scores[max_label]*100:.1f}%"
-    
-    return 0, "desconocido", "N/A"
+def extraer_score_hf(resultado, modelo_tipo="general"):
+    if not isinstance(resultado, list):
+        return None
+    scores = {}
+    for item in resultado:
+        if isinstance(item, dict) and "label" in item:
+            scores[item['label'].lower()] = item.get('score', 0)
+    fake_keys = ['artificial','fake','label_1','ai','ai-generated','deepfake','manipulated','fake_face']
+    for k in fake_keys:
+        if k in scores:
+            return scores[k]
+    if scores:
+        return max(scores.values())
+    return None
 
-def determinar_veredicto(score_general, score_rostros):
-    """
-    Combina los scores de ambos modelos para un veredicto final
-    """
-    # Si uno de los scores no es válido, usar solo el otro
-    if score_general is None:
-        score_promedio = score_rostros if score_rostros is not None else 0
-    elif score_rostros is None:
-        score_promedio = score_general
+def determinar_veredicto(score):
+    if score >= 0.65:
+        return "🚨 PROBABLEMENTE FALSO / IA", "fake-box", score
+    elif score >= 0.40:
+        return "⚠️ DUDOSO — PUEDE SER IA", "result-box", score
     else:
-        score_promedio = (score_general + score_rostros) / 2
-    
-    if score_promedio >= 0.7:
-        return "🚨 PROBABLEMENTE FALSO", "fake-box", score_promedio
-    elif score_promedio >= 0.4:
-        return "⚠️ DUDOSO", "result-box", score_promedio
-    else:
-        return "✅ PROBABLEMENTE REAL", "real-box", score_promedio
+        return "✅ PROBABLEMENTE REAL", "real-box", score
 
-# --- BARRA LATERAL ---
+
+# --- SIDEBAR ---
 with st.sidebar:
     st.title("⚙️ Configuración")
-    
     if not API_TOKEN:
-        st.error("❌ **HF_TOKEN no configurado**")
-        st.write("Para máxima precisión:")
-        st.write("1. Ve a [huggingface.co](https://huggingface.co)")
-        st.write("2. Crea una cuenta gratis")
-        st.write("3. Genera un token en Settings → Access Tokens")
-        st.write("4. En Streamlit: Settings → Secrets → `HF_TOKEN`")
+        st.warning("⚠️ **Sin token HF** — usando análisis forense local")
+        st.write("Para agregar HF como capa extra:")
+        st.write("Settings → Secrets → `HF_TOKEN`")
     else:
-        st.success("✅ Token configurado")
+        st.success("✅ Token HF configurado")
     
     st.divider()
-    
-    st.subheader("📊 Información")
+    st.subheader("🔬 Técnicas Forenses")
     st.write("""
-    **Modelos usados:**
-    - Análisis General de IA
-    - Detector de Deepfake
+    **Análisis local activo:**
+    - FFT (frecuencias espectrales)
+    - Error Level Analysis (ELA)
+    - Patrón de ruido sintético
+    - Distribución HSV/color
+    - Densidad y energía de bordes
+    - Simetría bilateral
     
-    **Tecnología:**
-    - Hugging Face Models
-    - OpenAI Research
+    **+ Hugging Face (si hay token):**
+    - AI Image Detector
+    - Deep Fake Detector
     """)
-    
     st.divider()
-    
     st.subheader("💡 Tips")
     st.write("""
-    - Imágenes claras = mejor precisión
-    - Mínimo 200x200 píxeles
-    - Si HF falla, los modelos se están reiniciando
-    - Espera 2-3 minutos e intenta de nuevo
+    - Mínimo 200×200 px
+    - El análisis forense funciona sin internet
+    - HF suma precisión cuando está disponible
     """)
 
-# --- INTERFAZ PRINCIPAL ---
+# --- HEADER ---
 st.title("🛡️ REAL OR FAKE")
-st.write("**Detecta imágenes y videos deepfake usando IA avanzada**")
-st.write("Cargá una foto o video y obtendrás un análisis cruzado de múltiples modelos.")
+st.write("**Detector forense de imágenes IA y deepfakes**")
+st.write("Análisis real con 6 técnicas forenses + modelos de Hugging Face cuando estén disponibles.")
 
-# Validar token
-if not API_TOKEN:
-    st.warning("⚠️ Sin token de HF, la precisión será limitada. Configúralo en el panel lateral.")
-
-# --- CARGA DE ARCHIVO ---
+# --- UPLOAD ---
 col_upload, col_info = st.columns([3, 1])
-
 with col_upload:
     archivo = st.file_uploader(
         "📤 Subí una foto o video",
         type=['jpg', 'jpeg', 'png', 'mp4', 'mov', 'avi', 'webp'],
-        help="Máximo 50MB. Los videos analizan el primer frame"
+        help="Máximo 50MB"
     )
-
 with col_info:
-    st.info("💡 Análisis con 2 modelos especializados")
+    st.info("🔬 6 análisis forenses reales")
 
 if archivo:
-    # Validar tamaño
     file_size_mb = len(archivo.getvalue()) / (1024 * 1024)
-    
     if file_size_mb > 50:
-        st.error(f"❌ Archivo demasiado grande ({file_size_mb:.1f}MB). Máximo: 50MB")
+        st.error(f"❌ Archivo muy grande ({file_size_mb:.1f}MB). Máximo: 50MB")
         st.stop()
     
     img_final = None
-    
-    # --- EXTRACCIÓN DE FRAME ---
-    with st.spinner("Procesando archivo..."):
+    with st.spinner("Procesando..."):
         try:
             if archivo.type in ["video/mp4", "video/quicktime", "video/x-msvideo"]:
-                # Video: extraer primer frame
                 tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
                 tfile.write(archivo.read())
                 tfile.close()
-                
                 vf = cv2.VideoCapture(tfile.name)
                 ret, frame = vf.read()
                 vf.release()
-                
                 if ret:
                     img_final = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                    archivo_tipo = f"📹 VIDEO (frame: 0s)"
+                    archivo_tipo = "📹 VIDEO (frame: 0s)"
                 else:
                     st.error("❌ No se pudo procesar el video")
                     st.stop()
             else:
-                # Imagen
-                img_final = Image.open(archivo)
+                img_final = Image.open(archivo).convert("RGB")
                 archivo_tipo = "🖼️ IMAGEN"
         except Exception as e:
-            st.error(f"❌ Error procesando archivo: {str(e)}")
+            st.error(f"❌ Error: {str(e)}")
             st.stop()
     
     if img_final:
-        # --- VISTA PREVIA ---
         col1, col2 = st.columns(2)
-        
         with col1:
             st.subheader("Vista previa")
             st.image(img_final, use_container_width=True)
-            st.caption(f"{archivo_tipo} | {archivo.name}")
+            st.caption(f"{archivo_tipo} | {archivo.name} | {file_size_mb:.2f} MB")
         
         with col2:
             st.subheader("Opciones")
-            st.write(f"📁 Archivo: **{archivo.name}**")
-            st.write(f"📊 Tamaño: **{file_size_mb:.2f} MB**")
-            st.write(f"🎯 Tipo: **{archivo_tipo}**")
-            
-            # Botón de análisis
-            analizar = st.button(
-                "🔍 EJECUTAR ANÁLISIS CRUZADO",
-                type="primary",
-                use_container_width=True
-            )
-            
-            if analizar:
-                # --- ANÁLISIS ---
-                with st.spinner("Analizando con IA... (30-60 segundos)"):
-                    # Preparar imagen para API
-                    buf = io.BytesIO()
-                    img_final.save(buf, format="JPEG", quality=90)
-                    img_bytes = buf.getvalue()
-                    
-                    progress_placeholder = st.empty()
-                    
-                    # Intenta con Hugging Face si hay token
-                    if API_TOKEN:
-                        progress_placeholder.info("⏳ Consultando Hugging Face...")
-                        res_gen = consultar_modelo_hf(MODELOS_HF_GENERAL, img_bytes, "Detector General")
-                        res_face = consultar_modelo_hf(MODELOS_HF_ROSTROS, img_bytes, "Detector Rostros")
-                    else:
-                        res_gen = {"error": "Sin token"}
-                        res_face = {"error": "Sin token"}
-                    
-                    # Si HF falla, intenta con modelo local
-                    if res_gen.get("error") or res_face.get("error"):
-                        progress_placeholder.info("⏳ Usando análisis local...")
-                        local_result = analizar_con_modelo_local(img_bytes)
-                        
-                        if local_result:
-                            res_gen = local_result.get("general", [])
-                            res_face = local_result.get("rostro", [])
-                        
-                    progress_placeholder.empty()
+            st.write(f"📁 **{archivo.name}**")
+            st.write(f"📐 Resolución: **{img_final.width}×{img_final.height}**")
+            analizar = st.button("🔍 EJECUTAR ANÁLISIS FORENSE", type="primary", use_container_width=True)
+        
+        if analizar:
+            with st.spinner("Ejecutando análisis forense... (puede tardar 15-30 seg)"):
+                buf = io.BytesIO()
+                img_final.save(buf, format="JPEG", quality=92)
+                img_bytes = buf.getvalue()
+                img_array = np.array(img_final)
                 
-                # --- PROCESAR RESULTADOS ---
-                score_gen, label_gen, conf_gen = extraer_score(res_gen, "general")
-                score_face, label_face, conf_face = extraer_score(res_face, "rostro")
+                # 1. Análisis forense local (siempre)
+                score_forense, detalles_forense = calcular_score_forensico(img_array)
                 
-                # Manejo de errores
-                if score_gen is None and score_face is None:
-                    st.markdown("""
-                    <div class="warning-box">
-                        <h4>⚠️ Los modelos no están disponibles en este momento</h4>
-                        <p><strong>Razones posibles:</strong></p>
-                        <ul>
-                            <li>Hugging Face está bajo mantenimiento o reiniciando</li>
-                            <li>Los servidores se están cargando (toma 1-2 minutos)</li>
-                            <li>Tu token HF_TOKEN no es válido o expiró</li>
-                            <li>Problema de conectividad o ancho de banda limitado</li>
-                        </ul>
-                        <p><strong>🔧 Soluciones que puedes intentar:</strong></p>
-                        <ul>
-                            <li><strong>Espera 2-3 minutos</strong> e intenta de nuevo</li>
-                            <li><strong>Recarga la página</strong> (presiona F5)</li>
-                            <li><strong>Verifica tu token</strong> en <a href="https://huggingface.co/settings/tokens">huggingface.co/settings/tokens</a></li>
-                            <li><strong>Revisa el estado</strong> de Hugging Face en <a href="https://status.huggingface.co/">status.huggingface.co</a></li>
-                            <li><strong>Intenta con otra imagen</strong> más pequeña para ahorrar ancho de banda</li>
-                        </ul>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    if isinstance(conf_gen, list) and conf_gen:
-                        st.markdown("""
-                        <div class="technical-box">
-                        <strong>📋 Detalles técnicos - Modelo General:</strong><br>
-                        """, unsafe_allow_html=True)
-                        for detalle in conf_gen:
-                            st.write(detalle)
-                        st.markdown("</div>", unsafe_allow_html=True)
-                    
-                    if isinstance(conf_face, list) and conf_face:
-                        st.markdown("""
-                        <div class="technical-box">
-                        <strong>📋 Detalles técnicos - Modelo Rostros:</strong><br>
-                        """, unsafe_allow_html=True)
-                        for detalle in conf_face:
-                            st.write(detalle)
-                        st.markdown("</div>", unsafe_allow_html=True)
+                # 2. Hugging Face (si hay token)
+                score_hf_gen = None
+                score_hf_face = None
+                hf_errores = []
+                
+                if API_TOKEN:
+                    with st.spinner("Consultando Hugging Face..."):
+                        res_gen, err_gen = consultar_modelo_hf(MODELOS_HF_GENERAL, img_bytes)
+                        res_face, err_face = consultar_modelo_hf(MODELOS_HF_ROSTROS, img_bytes)
+                        score_hf_gen = extraer_score_hf(res_gen, "general")
+                        score_hf_face = extraer_score_hf(res_face, "rostro")
+                        if err_gen: hf_errores.extend(err_gen)
+                        if err_face: hf_errores.extend(err_face)
+                
+                # Score final combinado
+                scores_validos = [score_forense]
+                if score_hf_gen is not None:
+                    scores_validos.append(score_hf_gen)
+                if score_hf_face is not None:
+                    scores_validos.append(score_hf_face)
+                
+                # Ponderación: forense tiene peso base, HF suma si está disponible
+                if len(scores_validos) == 1:
+                    score_final = score_forense
+                elif len(scores_validos) == 2:
+                    score_final = score_forense * 0.5 + scores_validos[1] * 0.5
                 else:
-                    # --- VEREDICTO FINAL ---
-                    veredicto, box_class, score_final = determinar_veredicto(score_gen, score_face)
+                    score_final = score_forense * 0.4 + score_hf_gen * 0.35 + score_hf_face * 0.25
+            
+            # --- VEREDICTO ---
+            veredicto, box_class, _ = determinar_veredicto(score_final)
+            
+            st.markdown(f"""
+            <div class="{box_class}">
+                <h2 style="margin-top:0; color:#fff;">VEREDICTO FINAL</h2>
+                <h1 style="margin-bottom:0; margin-top:10px; color:#fff;">{veredicto}</h1>
+                <p style="font-size:16px; margin-top:15px; margin-bottom:0; color:#ccc; font-family:'Space Mono',monospace;">
+                    Score de IA/Fake: <strong style="color:#00ff88;">{score_final*100:.1f}%</strong>
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.divider()
+            
+            # --- BREAKDOWN ---
+            col_f, col_hf = st.columns(2)
+            
+            with col_f:
+                st.subheader("🔬 Análisis Forense Local")
+                n_sosp = sum(1 for v in detalles_forense.values() if v.get("sospechoso", False))
+                st.write(f"**{n_sosp}/{len(detalles_forense)} indicadores sospechosos** | Score: `{score_forense*100:.1f}%`")
+                
+                for nombre, datos in detalles_forense.items():
+                    emoji = "🔴" if datos.get("sospechoso") else "🟢"
+                    estado = "SOSPECHOSO" if datos.get("sospechoso") else "NORMAL"
+                    clase_estado = "suspicious" if datos.get("sospechoso") else "value"
+                    
+                    # Armar métricas como string
+                    metricas = {k: v for k, v in datos.items() if k not in ["sospechoso", "descripcion"]}
+                    metricas_str = " | ".join([f"{k}: {v}" for k, v in metricas.items()])
                     
                     st.markdown(f"""
-                    <div class="{box_class}">
-                        <h2 style="margin-top: 0;">VEREDICTO FINAL</h2>
-                        <h1 style="margin-bottom: 0; margin-top: 10px;">{veredicto}</h1>
-                        <p style="font-size: 16px; margin-top: 15px; margin-bottom: 0;">
-                            <strong>Confianza: {score_final*100:.1f}%</strong>
-                        </p>
+                    <div class="forensic-card">
+                        {emoji} <span class="label">{nombre.upper()}</span>
+                        — <span class="{clase_estado}">{estado}</span><br>
+                        <span style="color:#888; font-size:11px;">{datos.get('descripcion','')}</span><br>
+                        <span style="color:#aaa;">{metricas_str}</span>
                     </div>
                     """, unsafe_allow_html=True)
+            
+            with col_hf:
+                st.subheader("🤖 Modelos Hugging Face")
+                if not API_TOKEN:
+                    st.warning("Sin token HF — solo análisis forense local activo")
+                    st.write("Configurá `HF_TOKEN` en Secrets para sumar precisión con modelos de deep learning.")
+                else:
+                    if score_hf_gen is not None:
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            🧠 <span style="color:#00ccff;">AI Image Detector</span><br>
+                            Score IA: <strong style="color:#00ff88;">{score_hf_gen*100:.1f}%</strong>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.progress(score_hf_gen)
+                    else:
+                        st.warning("❌ Modelo General: no disponible")
                     
-                    st.divider()
+                    if score_hf_face is not None:
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            👤 <span style="color:#00ccff;">Deep Fake Detector</span><br>
+                            Score Fake: <strong style="color:#00ff88;">{score_hf_face*100:.1f}%</strong>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.progress(score_hf_face)
+                    else:
+                        st.warning("❌ Modelo Rostros: no disponible")
                     
-                    # --- DETALLES DE CADA MODELO ---
-                    col_m1, col_m2 = st.columns(2)
-                    
-                    with col_m1:
-                        st.subheader("🧠 Modelo General (IA)")
-                        if score_gen is not None:
-                            st.markdown(f"""
-                            <div class="metric-card">
-                                <p><strong>Resultado:</strong> {label_gen.upper()}</p>
-                                <p><strong>Confianza:</strong> {conf_gen}</p>
-                                <p style="color: #667eea; font-size: 12px; margin-top: 10px;">
-                                    Detecta si la imagen fue creada por IA
-                                </p>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            st.progress(score_gen, text=f"{score_gen*100:.1f}%")
-                        else:
-                            st.warning(f"❌ No disponible")
-                    
-                    with col_m2:
-                        st.subheader("👤 Modelo Rostros (Deepfake)")
-                        if score_face is not None:
-                            st.markdown(f"""
-                            <div class="metric-card">
-                                <p><strong>Resultado:</strong> {label_face.upper()}</p>
-                                <p><strong>Confianza:</strong> {conf_face}</p>
-                                <p style="color: #667eea; font-size: 12px; margin-top: 10px;">
-                                    Detecta si el rostro fue manipulado o sintético
-                                </p>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            st.progress(score_face, text=f"{score_face*100:.1f}%")
-                        else:
-                            st.warning(f"❌ No disponible")
-                    
-                    st.divider()
-                    
-                    # --- INFORMACIÓN ÚTIL ---
-                    with st.expander("ℹ️ ¿Cómo funciona esto?"):
-                        st.write("""
-                        **Análisis Cruzado**: Tu imagen es analizada por dos modelos de IA especializados:
-                        
-                        1. **Modelo General**: Detecta patrones típicos de imágenes generadas por IA
-                           - Anomalías en colores y texturas
-                           - Artefactos de compresión
-                           - Inconsistencias de luz y sombra
-                        
-                        2. **Modelo de Rostros**: Se especializa en deepfakes y rostros sintéticos
-                           - Inconsistencias faciales
-                           - Movimientos oculares anómalos
-                           - Asimetrías y parpadeos falsos
-                        
-                        El resultado final combina ambos análisis para darte un veredicto más preciso.
-                        
-                        **⚠️ Limitaciones**:
-                        - Ningún sistema es 100% preciso (precisión típica: 85-95%)
-                        - Imágenes muy comprimidas pueden dar resultados inexactos
-                        - Los modelos mejoran constantemente con nuevos datos
-                        - Úsalo como referencia, no como prueba legal definitiva
-                        """)
-                    
-                    # --- EXPORTAR RESULTADOS ---
-                    with st.expander("📊 Datos técnicos y exportar"):
-                        datos_exportar = {
-                            "fecha_analisis": datetime.now().isoformat(),
-                            "archivo": archivo.name,
-                            "tipo": archivo_tipo,
-                            "resultado": veredicto,
-                            "confianza_general": f"{score_final*100:.1f}%"
-                        }
-                        
-                        if score_gen is not None:
-                            datos_exportar["modelo_general"] = {
-                                "label": label_gen,
-                                "score": float(score_gen),
-                                "confianza": conf_gen
-                            }
-                        
-                        if score_face is not None:
-                            datos_exportar["modelo_rostros"] = {
-                                "label": label_face,
-                                "score": float(score_face),
-                                "confianza": conf_face
-                            }
-                        
-                        st.json(datos_exportar)
+                    if hf_errores:
+                        with st.expander("Ver errores HF"):
+                            for e in hf_errores:
+                                st.write(f"- {e}")
+            
+            st.divider()
+            
+            # --- EXPORTAR ---
+            with st.expander("📊 Exportar datos técnicos"):
+                datos_export = {
+                    "fecha": datetime.now().isoformat(),
+                    "archivo": archivo.name,
+                    "veredicto": veredicto,
+                    "score_final": round(score_final, 4),
+                    "score_forense_local": round(score_forense, 4),
+                    "score_hf_general": round(score_hf_gen, 4) if score_hf_gen else None,
+                    "score_hf_rostros": round(score_hf_face, 4) if score_hf_face else None,
+                    "detalle_forense": detalles_forense
+                }
+                st.json(datos_export)
+
 else:
-    st.info("👆 Carga una imagen o video para comenzar el análisis")
+    st.info("👆 Cargá una imagen o video para comenzar el análisis forense")
